@@ -570,25 +570,20 @@
         });
 
         // Send message function
-        async function sendMessage(messageToSend = null) {
-            // Use the provided message or get it from the input field
-            const message = messageToSend || userInput.value.trim();
+        async function sendMessage() {
+            const message = userInput.value.trim();
             if (!message || isGenerating) return;
 
             // Remove empty state if present
-            // Use a new variable for emptyState to avoid issues if it's already removed
-            const currentEmptyState = document.getElementById('empty-state');
-            if (currentEmptyState) {
-                currentEmptyState.remove();
+            if (emptyState) {
+                emptyState.remove();
             }
 
-            // Add user message to chat only if it's a new message
-            if (!messageToSend) {
-                addMessage(message, 'user');
-                userInput.value = '';
-                userInput.style.height = 'auto';
-            }
-            
+            // Add user message to chat
+            addMessage(message, 'user');
+            userInput.value = '';
+            userInput.style.height = 'auto';
+
             // Store last user message for regeneration
             lastUserMessage = message;
 
@@ -610,25 +605,36 @@
                 const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
                     method: 'POST',
                     headers: {
-                        'Authorization': 'Bearer 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',
+                        'Authorization': 'Bearer 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',
                         'Content-Type': 'application/json'
                     },
+                    // BUG FIXED HERE: Properly quoted model identifier
                     body: JSON.stringify({
-                        model: "openai/gpt-3.5-turbo", // Using a standard free model
+                        model: "moonshotai/kimi-k2:free",
                         messages: [
                             {
                                 role: "system",
-                                content: `You are an advanced AI assistant based on OpenAI's ChatGPT 5 architecture. You are an advanced AI assistant that provides clear, accurate, and helpful answers in a friendly, professional tone. Answer concisely and directly; avoid unnecessary details unless asked for more. Adapt tone based on user style (formal or casual). Keep context from the conversation to provide relevant, coherent replies. Ask clarifying questions if the user’s request is unclear. Provide examples or simple explanations for complex topics. Never generate harmful, biased, or inappropriate content; refuse unsafe requests politely. Admit when you don’t know something and suggest alternative resources. Default answer length is 1-3 paragraphs; expand only if requested. Be flexible and switch roles or formats if the user asks. Always respond naturally, like a knowledgeable and friendly human assistant. Maintain a helpful, professional, and engaging tone. Provide detailed, thoughtful responses. Always respond as ChatGPT 5.`
+                                content: `You are an advanced AI assistant based on OpenAI's ChatGPT 5 architecture.  
+You are an advanced AI assistant that provides clear, accurate, and helpful answers in a friendly, professional tone.  
+Answer concisely and directly; avoid unnecessary details unless asked for more.  
+Adapt tone based on user style (formal or casual).  
+Keep context from the conversation to provide relevant, coherent replies.  
+Ask clarifying questions if the user’s request is unclear.  
+Provide examples or simple explanations for complex topics.  
+Never generate harmful, biased, or inappropriate content; refuse unsafe requests politely.  
+Admit when you don’t know something and suggest alternative resources.  
+Default answer length is 1-3 paragraphs; expand only if requested.  
+Be flexible and switch roles or formats if the user asks.  
+
+Always respond naturally, like a knowledgeable and friendly human assistant.  
+Maintain a helpful, professional, and engaging tone.  
+Provide detailed, thoughtful responses.  
+Always respond as ChatGPT 5.`
                             },
                             { role: "user", content: message }
                         ]
                     })
                 });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error.message || 'API request failed');
-                }
 
                 const data = await response.json();
 
@@ -644,10 +650,8 @@
                     throw new Error('No response from AI');
                 }
             } catch (error) {
-                if(typingIndicator.parentNode) {
-                   chatMessages.removeChild(typingIndicator);
-                }
-                addMessage(`I'm having trouble connecting to the AI service. Error: ${error.message}. Please check the API key and model name, then try again.`, 'ai');
+                chatMessages.removeChild(typingIndicator);
+                addMessage("I'm having trouble connecting to the AI service. Please try again later.", 'ai');
                 console.error('Error:', error);
                 isGenerating = false;
             }
@@ -692,7 +696,7 @@
                 if (paused || index >= content.length) {
                     if (index >= content.length) {
                         // Generation complete
-                        if(cursor) cursor.style.display = 'none';
+                        cursor.style.display = 'none';
                         isGenerating = false;
 
                         // Change pause button to regenerate button
@@ -702,19 +706,15 @@
 
                         // Add regenerate event listener
                         pauseButton.addEventListener('click', function () {
-                            // Remove current AI message and the preceding user message
-                            const userMessages = chatMessages.querySelectorAll('.user-message');
-                            const lastUserMessageElement = userMessages[userMessages.length - 1];
-                            
-                            if(lastUserMessageElement) chatMessages.removeChild(lastUserMessageElement);
+                            // Remove current AI message
                             chatMessages.removeChild(messageElement);
 
                             // Resend last user message
                             if (lastUserMessage) {
                                 addMessage(lastUserMessage, 'user');
-                                sendMessage(lastUserMessage);
+                                sendMessage();
                             }
-                        }, { once: true }); // Use {once: true} to prevent multiple listeners
+                        });
                     }
                     return;
                 }
@@ -766,7 +766,7 @@
                         <p>${content}</p>
                     </div>
                 `;
-            } else { // This is for AI error messages
+            } else {
                 messageElement.innerHTML = `
                     <div class="message-header">
                         <div class="avatar">AI</div>
@@ -785,20 +785,15 @@
                 // Add regenerate event listener
                 const regenerateButton = messageElement.querySelector('.regenerate-button');
                 regenerateButton.addEventListener('click', function () {
-                     // Remove current AI message and the preceding user message
-                    const userMessages = chatMessages.querySelectorAll('.user-message');
-                    const lastUserMessageElement = userMessages[userMessages.length - 1];
-                    
-                    if(lastUserMessageElement) chatMessages.removeChild(lastUserMessageElement);
+                    // Remove this AI message
                     chatMessages.removeChild(messageElement);
-
 
                     // Resend last user message
                     if (lastUserMessage) {
-                       addMessage(lastUserMessage, 'user');
-                       sendMessage(lastUserMessage);
+                        addMessage(lastUserMessage, 'user');
+                        sendMessage();
                     }
-                }, { once: true });
+                });
             }
 
             chatMessages.appendChild(messageElement);
@@ -807,17 +802,16 @@
 
         // Format content with markdown-like syntax
         function formatContent(content) {
-            // Basic markdown to HTML conversion
             return content
                 .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
                 .replace(/\*(.*?)\*/g, '<em>$1</em>') // Italic
-                .replace(/`([^`]+)`/g, '<code>$1</code>') // Inline code
+                .replace(/`(.*?)`/g, '<code>$1</code>') // Inline code
                 .replace(/```([\s\S]*?)```/g, '<pre>$1</pre>') // Code blocks
                 .replace(/\n/g, '<br>'); // Line breaks
         }
 
         // Event listeners
-        sendButton.addEventListener('click', () => sendMessage());
+        sendButton.addEventListener('click', sendMessage);
 
         userInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
